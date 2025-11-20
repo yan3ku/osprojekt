@@ -8,21 +8,52 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 
-static struct nf_hook_ops *nf_tracer_ops = NULL;
-static struct nf_hook_ops *nf_tracer_out_ops = NULL;
+#define IN_CREATE_ADDR(a, b, c, d) \
+    htonl((((__u32)a) << 24) | (((__u32)b) << 16) | (((__u32)c) << 8) | ((__u32)d))
 
-static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+#define TARGET_ADDR IN_CREATE_ADDR(10, 0, 0, 5)
+
+static struct nf_hook_ops *nf_tracer_ops = NULL;
+/* static struct nf_hook_ops *nf_tracer_out_ops = NULL; */
+
+static size_t
+seglen(struct sk_buff *skb)
+{
+  return skb->len - (((struct iphdr*)skb)->ihl << 2);
+}
+
+static void
+hdr_set_dst(struct sk_buff *skb, int dest)
+{
+  struct iphdr  *iph  = ip_hdr(skb);
+  struct tcphdr *tcph = tcp_hdr(skb);  
+
+  /* iph header update */
+  csum_replace4(&iph->check, iph->daddr, dest);
+
+  /* set destination */
+  iph->daddr = dest;
+  tcph->dest = dest;
+
+  /* the tcp header is calculated from the ipv4 pseudo header */
+  /* saddr, daddr, proto, and length */
+  /* partial is just tcp and tcpudp magic combines the iph */
+  int tcp_partial = csum_partial(tcph, seglen(skb), 0);
+  tcph->check = csum_tcpudp_magic(iph->saddr, iph->daddr, seglen(skb), iph->protocol, tcp_partial);
+}  
+
+static unsigned int
+nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
+{
     if(skb==NULL) {
         return NF_ACCEPT;
     }
 
     struct iphdr * iph;
     iph = ip_hdr(skb);
-
     if(iph && iph->protocol == IPPROTO_TCP) {
-        struct tcphdr *tcph = tcp_hdr(skb);
-
-        pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->saddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr));
+	hdr_set_dst(skb, TARGET_ADDR);
+        /* pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->saddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr)); */
     }
 
     return NF_ACCEPT;
@@ -35,23 +66,23 @@ static int __init nf_tracer_init(void) {
 
     if(nf_tracer_ops!=NULL) {
         nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
-        nf_tracer_ops->hooknum = NF_INET_PRE_ROUTING;
+        nf_tracer_ops->hooknum = NF_INET_LOCAL_OUT;
         nf_tracer_ops->pf = NFPROTO_IPV4;
         nf_tracer_ops->priority = NF_IP_PRI_FIRST;
 
         nf_register_net_hook(&init_net, nf_tracer_ops);
     }
 
-    nf_tracer_out_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL);
+    /* nf_tracer_out_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL); */
 
-    if(nf_tracer_out_ops!=NULL) {
-        nf_tracer_out_ops->hook = (nf_hookfn*)nf_tracer_handler;
-        nf_tracer_out_ops->hooknum = NF_INET_LOCAL_OUT;
-        nf_tracer_out_ops->pf = NFPROTO_IPV4;
-        nf_tracer_out_ops->priority = NF_IP_PRI_FIRST;
+    /* if(nf_tracer_out_ops!=NULL) { */
+    /*     nf_tracer_out_ops->hook = (nf_hookfn*)nf_tracer_handler; */
+    /*     nf_tracer_out_ops->hooknum = NF_INET_LOCAL_OUT; */
+    /*     nf_tracer_out_ops->pf = NFPROTO_IPV4; */
+    /*     nf_tracer_out_ops->priority = NF_IP_PRI_FIRST; */
 
-        nf_register_net_hook(&init_net, nf_tracer_out_ops);
-    }
+    /*     nf_register_net_hook(&init_net, nf_tracer_out_ops); */
+    /* } */
 
     return 0;
 }
@@ -63,10 +94,10 @@ static void __exit nf_tracer_exit(void) {
         kfree(nf_tracer_ops);
     }
 
-    if(nf_tracer_out_ops != NULL) {
-        nf_unregister_net_hook(&init_net, nf_tracer_out_ops);
-        kfree(nf_tracer_out_ops);
-    }
+    /* if(nf_tracer_out_ops != NULL) { */
+    /*     nf_unregister_net_hook(&init_net, nf_tracer_out_ops); */
+    /*     kfree(nf_tracer_out_ops); */
+    /* } */
 }
 
 module_init(nf_tracer_init);
