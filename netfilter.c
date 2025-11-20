@@ -28,18 +28,16 @@ hdr_set_dst(struct sk_buff *skb, int dest)
   struct iphdr  *iph  = ip_hdr(skb);
   struct tcphdr *tcph = tcp_hdr(skb);  
 
-  /* iph header update */
-  csum_replace4(&iph->check, iph->daddr, dest);
-
-  /* set destination */
-  iph->daddr = dest;
-  tcph->dest = dest;
-
   /* the tcp header is calculated from the ipv4 pseudo header */
   /* saddr, daddr, proto, and length */
   /* partial is just tcp and tcpudp magic combines the iph */
+  tcph->dest = dest;
   int tcp_partial = csum_partial(tcph, seglen(skb), 0);
-  tcph->check = csum_tcpudp_magic(iph->saddr, iph->daddr, seglen(skb), iph->protocol, tcp_partial);
+  tcph->check = csum_tcpudp_magic(iph->saddr, dest, seglen(skb), iph->protocol, tcp_partial);
+
+  /* iph header update */
+  csum_replace4(&iph->check, iph->daddr, dest);
+  iph->daddr = dest;
 }  
 
 static unsigned int
@@ -51,9 +49,12 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
     struct iphdr * iph;
     iph = ip_hdr(skb);
+  
     if(iph && iph->protocol == IPPROTO_TCP) {
 	hdr_set_dst(skb, TARGET_ADDR);
-        /* pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->saddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr)); */
+	struct iphdr * iph = ip_hdr(skb);	
+	struct tcphdr *tcph = tcp_hdr(skb);  	
+        pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n", &(iph->saddr),ntohs(tcph->source),&(iph->saddr),ntohs(tcph->dest), ntohl(tcph->seq), ntohl(tcph->ack_seq), ntohs(tcph->window), ntohs(tcph->check), ntohs(tcph->urg_ptr));
     }
 
     return NF_ACCEPT;
