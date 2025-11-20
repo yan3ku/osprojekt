@@ -19,7 +19,7 @@ static struct nf_hook_ops *nf_tracer_ops = NULL;
 static size_t
 seglen(struct sk_buff *skb)
 {
-  return skb->len - (((struct iphdr*)skb)->ihl << 2);
+  return skb->len - (ip_hdr(skb)->ihl << 2);
 }
 
 static void
@@ -31,7 +31,7 @@ hdr_set_dst(struct sk_buff *skb, int dest)
   /* the tcp header is calculated from the ipv4 pseudo header */
   /* saddr, daddr, proto, and length */
   /* partial is just tcp and tcpudp magic combines the iph */
-  tcph->dest = dest;
+  /* tcph->daddr = daddr; */
   int tcp_partial = csum_partial(tcph, seglen(skb), 0);
   tcph->check = csum_tcpudp_magic(iph->saddr, dest, seglen(skb), iph->protocol, tcp_partial);
 
