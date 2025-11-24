@@ -24,7 +24,7 @@ static void log_packet(struct sk_buff *skb)
     pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n",
 	    &(iph->saddr),
 	    ntohs(tcph->source),
-	    &(iph->saddr),
+	    &(iph->daddr),
 	    ntohs(tcph->dest),
 	    ntohl(tcph->seq),
 	    ntohl(tcph->ack_seq),
@@ -39,19 +39,20 @@ static unsigned int
 nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
   if (!skb) return NF_ACCEPT;
+  log_packet(skb);
+  
   if (skb->pkt_type == PACKET_HOST) {
-    /* swap to vpn host */
+    pr_info("RELAY TO VPN HOST\n");
     return NF_ACCEPT;
   }
     
 
-  struct iphdr * iph;
-  iph = ip_hdr(skb);
+  struct iphdr * iph = ip_hdr(skb);
   
   if(iph && iph->protocol == IPPROTO_TCP) {
     struct iphdr * iph = ip_hdr(skb);	
     struct tcphdr *tcph = tcp_hdr(skb);
-    log_packet(skb);
+    pr_info("RELAY TO ORIG DEST\n");
   }
 
   return NF_ACCEPT;
@@ -64,7 +65,7 @@ static int __init nf_tracer_init(void) {
 
   if(nf_tracer_ops!=NULL) {
     nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
-    nf_tracer_ops->hooknum = NF_INET_LOCAL_OUT;
+    nf_tracer_ops->hooknum = NF_INET_PRE_ROUTING;
     nf_tracer_ops->pf = NFPROTO_IPV4;
     nf_tracer_ops->priority = NF_IP_PRI_FIRST;
 
