@@ -8,10 +8,11 @@
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
 
-#define IN_CREATE_ADDR(a, b, c, d)					\
+#define QUAD4(a, b, c, d) \
   htonl((((__u32)a) << 24) | (((__u32)b) << 16) | (((__u32)c) << 8) | ((__u32)d))
 
-#define TARGET_ADDR IN_CREATE_ADDR(10, 10, 10, 5)
+#define RELAY_HOST QUAD4(10, 10, 10, 5)
+#define LOCAL_HOST  QUAD4(10, 10, 10, 10)
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
@@ -21,17 +22,12 @@ static void log_packet(struct sk_buff *skb)
 
     struct iphdr * iph = ip_hdr(skb);	
     struct tcphdr *tcph = tcp_hdr(skb);  
-    pr_info("source : %pI4:%hu | dest : %pI4:%hu | seq : %u | ack_seq : %u | window : %hu | csum : 0x%hx | urg_ptr %hu\n",
+    pr_info("source : %pI4:%hu | dest : %pI4:%hu | type: %d\n",
 	    &(iph->saddr),
 	    ntohs(tcph->source),
 	    &(iph->daddr),
 	    ntohs(tcph->dest),
-	    ntohl(tcph->seq),
-	    ntohl(tcph->ack_seq),
-	    ntohs(tcph->window),
-	    ntohs(tcph->check),
-	    ntohs(tcph->urg_ptr));
-
+	    skb->pkt_type);
 }
 
 
@@ -40,19 +36,22 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 {
   if (!skb) return NF_ACCEPT;
   log_packet(skb);
-  
-  if (skb->pkt_type == PACKET_HOST) {
-    pr_info("RELAY TO VPN HOST\n");
+
+
+  struct iphdr *iph = ip_hdr(skb);
+  if (iph->daddr != LOCAL_HOST) {
+    pr_info("RELAY TO VPN\n");
     return NF_ACCEPT;
   }
-    
 
-  struct iphdr * iph = ip_hdr(skb);
-  
-  if(iph && iph->protocol == IPPROTO_TCP) {
-    struct iphdr * iph = ip_hdr(skb);	
-    struct tcphdr *tcph = tcp_hdr(skb);
-    pr_info("RELAY TO ORIG DEST\n");
+
+  if (iph->saddr == RELAY_HOST) {
+    if(iph && iph->protocol == IPPROTO_TCP) {
+      struct iphdr * iph = ip_hdr(skb);	
+      struct tcphdr *tcph = tcp_hdr(skb);
+      pr_info("RECEIVED FROM VPN\n");
+    }
+    return NF_ACCEPT;    
   }
 
   return NF_ACCEPT;
