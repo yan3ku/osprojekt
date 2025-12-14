@@ -17,6 +17,22 @@
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
+void check_ipv4(struct sk_buff *skb){
+  struct iphdr *iph = ip_hdr(skb);
+#define HW_OFFLOAD
+#ifdef HW_OFFLOAD
+  skb->ip_summed = CHECKSUM_PARTIAL;
+  skb->csum_start = (unsigned char*)iph - skb->data;
+  skb->csum_offset = (unsigned char *)&(iph->check) - (unsigned char *)iph;
+#else
+  skb->ip_summed = CHECKSUM_NONE;
+  skb->csum_valid = 0;
+  iph->check = 0;
+  iph->check = ip_fast_csum((u8 *)iph, iph->ihl);
+#endif
+}
+
+
 static void log_packet(struct sk_buff *skb)
 {
 
@@ -44,8 +60,9 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
-      pr_info("RELAY TO VPN\n");
-    }    
+      pr_info("RELAY\n");
+    }
+    check_ipv4(skb);
     return NF_ACCEPT;
   }
 
@@ -54,13 +71,15 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct iphdr * iph = ip_hdr(skb);	
       struct tcphdr *tcph = tcp_hdr(skb);
-      pr_info("RECEIVED FROM VPN\n");
+      pr_info("RECEIVED FROM RELAY\n");
     }
     return NF_ACCEPT;    
   }
 
   return NF_ACCEPT;
 }
+
+
 
 
 static int __init nf_tracer_init(void) {
