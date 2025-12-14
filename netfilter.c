@@ -40,7 +40,12 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
   struct iphdr *iph = ip_hdr(skb);
   if (iph->daddr != LOCAL_HOST) {
-    pr_info("RELAY TO VPN\n");
+    struct iphdr * iph = ip_hdr(skb);	
+    iph->daddr = RELAY_HOST;
+    if(iph && iph->protocol == IPPROTO_TCP) {
+      struct tcphdr *tcph = tcp_hdr(skb);
+      pr_info("RELAY TO VPN\n");
+    }    
     return NF_ACCEPT;
   }
 
