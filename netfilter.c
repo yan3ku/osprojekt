@@ -17,19 +17,45 @@
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
-void check_ipv4(struct sk_buff *skb){
-  struct iphdr *iph = ip_hdr(skb);
-#define HW_OFFLOAD
-#ifdef HW_OFFLOAD
+static void check_ipv4(struct sk_buff *skb);
+
+void check_ipv4(struct sk_buff *skb) {
+  struct iphdr *iph;
+  struct udphdr *udph;
+  struct tcphdr *tcph;
+  void *hptr;
+  int hlen;
+  __sum16 *checkf;
+
+  if (skb_is_nonlinear(skb))
+    skb_linearize(skb);
+
+  iph = ip_hdr(skb);
+#ifdef HW_OFFLOAD		/* no idea how to make this work.... */
   skb->ip_summed = CHECKSUM_PARTIAL;
   skb->csum_start = (unsigned char*)iph - skb->data;
   skb->csum_offset = (unsigned char *)&(iph->check) - (unsigned char *)iph;
 #else
   skb->ip_summed = CHECKSUM_NONE;
   skb->csum_valid = 0;
-  iph->check = 0;
+  iph->check = 0; 			/* spec requires the checksum is calculated with check = 0 */
   iph->check = ip_fast_csum((u8 *)iph, iph->ihl);
 #endif
+  
+  switch (iph->protocol) {
+  case IPPROTO_TCP:
+    hptr = tcph = tcp_hdr(skb);
+    checkf = &(tcph->check);
+    break;
+  case IPPROTO_UDP:
+    hptr = udph = udp_hdr(skb);
+    checkf = &(udph->check);
+    break;
+  }
+  hlen = ntohs(iph->tot_len) - iph->ihl*4;
+  *checkf = 0;
+  *checkf = csum_tcpudp_magic(iph->saddr, iph->daddr, hlen, iph->protocol,
+			      csum_partial(hptr, hlen, 0));
 }
 
 
