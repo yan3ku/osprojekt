@@ -86,7 +86,7 @@ static void push_tcp_opt(struct sk_buff *skb) {
   /* set tcp options 255 to 1 */
   tcp_opt[0] = 255;
   tcp_opt[1] = 8;
-  tcp_opt[1] = 0x01;  
+  tcp_opt[2] = 0x01;  
 }
 
 
