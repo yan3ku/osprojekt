@@ -65,29 +65,24 @@ static void push_tcp_opt(struct sk_buff *skb) {
   int oldsaddr = tcp_hdr(skb)->source;
   struct tcphdr *oldtcphdr =  tcp_hdr(skb);
   struct tcphdr *tcph = tcp_hdr(skb);
-  struct iphdr *iph = ip_hdr(skb);  
-  char *beg = skb_push(skb, 8);
+  struct iphdr *iph = ip_hdr(skb);
+  int iplen = iph->ihl*4;
   
-  /* pr_warn("iph diff %ld\n", ip_hdr(skb) - iph);   */
-  /* pr_warn("tot %ld\n", iph->tot_len);   */
-  /* pr_warn("ihl %ld\n", iph->ihl*4); */
-  /* pr_warn("iph off %ld\n", ((char*)iph - beg)); */
-  /* pr_warn("iph - tcph %ld\n", ((char*)tcph - (char*)iph));   */
-  /* pr_warn("tcph + iph %ld\n", ((char*)tcph - (beg+8)) + tcph->doff * 4);  */
-  memmove(beg, beg+8, ((char*)tcph - (beg+8)) + tcph->doff*4);
+  char *beg = skb_push(skb, 8);
+  memmove(beg, beg+8, iplen + tcp_hdrlen(skb));
+  skb_reset_network_header(skb);
+  skb_set_transport_header(skb, iplen);
 
-  skb->network_header -= 8;
-  skb->transport_header -= 8;			     
   struct iphdr *newip =  ip_hdr(skb);
   struct tcphdr *newtcp = tcp_hdr(skb);
   be16_add_cpu(&newip->tot_len, 8);
   
-  char *tcp_opt = tcp_hdrlen(tcph);
-  newtcp->doff += 2;
+  /* char *tcp_opt = tcp_hdrlen(tcph); */
+  /* newtcp->doff += 2; */
 
-  /* set tcp options 255 to 1 */
-  tcp_opt[0] = 255;
-  tcp_opt[1] = 1;  
+  /* /\* set tcp options 255 to 1 *\/ */
+  /* tcp_opt[0] = 255; */
+  /* tcp_opt[1] = 1;   */
 
   if (tcp_hdr(skb)->source != oldsaddr) {
     pr_warn("Failed to memmove\n");
