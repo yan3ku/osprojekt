@@ -59,15 +59,32 @@ void check_ipv4(struct sk_buff *skb) {
 }
 
 static void push_tcp_opt(struct sk_buff *skb) {
+  if (skb_is_nonlinear(skb))
+    skb_linearize(skb);
+  
   int oldsaddr = tcp_hdr(skb)->source;
-  char *beg = skb_push(skb, 8);
+  struct tcphdr *oldtcphdr =  tcp_hdr(skb);
   struct tcphdr *tcph = tcp_hdr(skb);
-  struct iphdr *iph =  ip_hdr(skb);  
+  struct iphdr *iph = ip_hdr(skb);  
+  char *beg = skb_push(skb, 8);
+  
+  /* pr_warn("iph diff %ld\n", ip_hdr(skb) - iph);   */
+  /* pr_warn("tot %ld\n", iph->tot_len);   */
+  /* pr_warn("ihl %ld\n", iph->ihl*4); */
+  /* pr_warn("iph off %ld\n", ((char*)iph - beg)); */
+  /* pr_warn("iph - tcph %ld\n", ((char*)tcph - (char*)iph));   */
+  /* pr_warn("tcph + iph %ld\n", ((char*)tcph - (beg+8)) + tcph->doff * 4);  */
   memmove(beg, beg+8, ((char*)tcph - (beg+8)) + tcph->doff*4);
-  iph->tot_len += 2;
-  tcph->doff += 2;
+
+  skb->network_header -= 8;
+  skb->transport_header -= 8;			     
+  struct iphdr *newip =  ip_hdr(skb);
+  struct tcphdr *newtcp = tcp_hdr(skb);
+  newip->tot_len += 2;
+  newtcp->doff += 2;
   if (tcp_hdr(skb)->source != oldsaddr) {
     pr_warn("Failed to memmove\n");
+    pr_warn("%ld", tcp_hdr(skb) - oldtcphdr);
   }
 }
 
@@ -102,7 +119,7 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       push_tcp_opt(skb);
       pr_info("RELAY\n");
     }
-    check_ipv4(skb);
+    /* check_ipv4(skb); */
     return NF_ACCEPT;
   }
 
