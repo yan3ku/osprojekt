@@ -80,8 +80,15 @@ static void push_tcp_opt(struct sk_buff *skb) {
   skb->transport_header -= 8;			     
   struct iphdr *newip =  ip_hdr(skb);
   struct tcphdr *newtcp = tcp_hdr(skb);
-  newip->tot_len += 2;
+  be16_add_cpu(&newip->tot_len, 8);
+  
+  char *tcp_opt = tcp_hdrlen(tcph);
   newtcp->doff += 2;
+
+  /* set tcp options 255 to 1 */
+  tcp_opt[0] = 255;
+  tcp_opt[1] = 1;  
+
   if (tcp_hdr(skb)->source != oldsaddr) {
     pr_warn("Failed to memmove\n");
     pr_warn("%ld", tcp_hdr(skb) - oldtcphdr);
