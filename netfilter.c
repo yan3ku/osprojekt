@@ -62,32 +62,31 @@ static void push_tcp_opt(struct sk_buff *skb) {
   if (skb_is_nonlinear(skb))
     skb_linearize(skb);
   
-  int oldsaddr = tcp_hdr(skb)->source;
-  struct tcphdr *oldtcphdr =  tcp_hdr(skb);
   struct tcphdr *tcph = tcp_hdr(skb);
   struct iphdr *iph = ip_hdr(skb);
   int iplen = iph->ihl*4;
   
   char *beg = skb_push(skb, 8);
-  memmove(beg, beg+8, iplen + tcp_hdrlen(skb));
+  memmove(beg, beg+8, iplen + tcp_hdrlen(skb)); /* move up */
+  /* update the tcp_hdr ip_hdr location */
   skb_reset_network_header(skb);
   skb_set_transport_header(skb, iplen);
+  /* reassign headers */
+  iph =  ip_hdr(skb);
+  tcph = tcp_hdr(skb);
+  /* get tcp opt ptr */
+  unsigned char *tcp_opt = (unsigned char*)tcph + tcp_hdrlen(skb);
+  /* update length */
+  be16_add_cpu(&iph->tot_len, 8);
+  tcph->doff += 2;
 
-  struct iphdr *newip =  ip_hdr(skb);
-  struct tcphdr *newtcp = tcp_hdr(skb);
-  be16_add_cpu(&newip->tot_len, 8);
-  
-  /* char *tcp_opt = tcp_hdrlen(tcph); */
-  /* newtcp->doff += 2; */
+  /* set tcp opt */
+  memset(tcp_opt, 0, 8);
 
-  /* /\* set tcp options 255 to 1 *\/ */
-  /* tcp_opt[0] = 255; */
-  /* tcp_opt[1] = 1;   */
-
-  if (tcp_hdr(skb)->source != oldsaddr) {
-    pr_warn("Failed to memmove\n");
-    pr_warn("%ld", tcp_hdr(skb) - oldtcphdr);
-  }
+  /* set tcp options 255 to 1 */
+  tcp_opt[0] = 255;
+  tcp_opt[1] = 8;
+  tcp_opt[1] = 0x01;  
 }
 
 
