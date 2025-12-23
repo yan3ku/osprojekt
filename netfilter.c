@@ -58,6 +58,19 @@ void check_ipv4(struct sk_buff *skb) {
 			      csum_partial(hptr, hlen, 0));
 }
 
+static void push_tcp_opt(struct sk_buff *skb) {
+  int oldsaddr = tcp_hdr(skb)->source;
+  char *beg = skb_push(skb, 8);
+  struct tcphdr *tcph = tcp_hdr(skb);
+  struct iphdr *iph =  ip_hdr(skb);  
+  memmove(beg, beg+8, ((char*)tcph - (beg+8)) + tcph->doff*4);
+  iph->tot_len += 2;
+  tcph->doff += 2;
+  if (tcp_hdr(skb)->source != oldsaddr) {
+    pr_warn("Failed to memmove\n");
+  }
+}
+
 
 static void log_packet(struct sk_buff *skb)
 {
@@ -86,6 +99,7 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
+      push_tcp_opt(skb);
       pr_info("RELAY\n");
     }
     check_ipv4(skb);
