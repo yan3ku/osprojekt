@@ -99,9 +99,9 @@ push_tcp_opt(struct sk_buff *skb, __u32 value) {
   tcp_opt[0] = 255;
   tcp_opt[1] = 8;
   tcp_opt[2] = value & 0xFF;
-  tcp_opt[3] = (value >> 2) & 0xFF;
-  tcp_opt[4] = (value >> 4) & 0xFF;
-  tcp_opt[5] = (value >> 6) & 0xFF;
+  tcp_opt[3] = (value >> 8)  & 0xFF;
+  tcp_opt[4] = (value >> 16) & 0xFF;
+  tcp_opt[5] = (value >> 24) & 0xFF;
   tcp_opt[6] = 0;
   tcp_opt[7] = 0;    
 }
@@ -133,7 +133,7 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
-      /* push_tcp_opt(skb, iph->daddr); */
+      push_tcp_opt(skb, iph->daddr);
       pr_info("RELAY\n");
     }
     check_ipv4(skb);
