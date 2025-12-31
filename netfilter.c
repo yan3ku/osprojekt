@@ -27,6 +27,11 @@ void check_ipv4(struct sk_buff *skb) {
   int hlen;
   __sum16 *checkf;
 
+  /* if (skb_cloned(skb) || skb_is_nonlinear(skb)) { */
+  /*   if (pskb_expand_head(skb, 0, 0, GFP_ATOMIC)) */
+  /*     return; */
+  /* } */
+
   if (skb_is_nonlinear(skb))
     skb_linearize(skb);
 
@@ -41,7 +46,7 @@ void check_ipv4(struct sk_buff *skb) {
   iph->check = 0; 			/* spec requires the checksum is calculated with check = 0 */
   iph->check = ip_fast_csum((u8 *)iph, iph->ihl);
 #endif
-  
+
   switch (iph->protocol) {
   case IPPROTO_TCP:
     hptr = tcph = tcp_hdr(skb);
@@ -51,6 +56,8 @@ void check_ipv4(struct sk_buff *skb) {
     hptr = udph = udp_hdr(skb);
     checkf = &(udph->check);
     break;
+  default:
+    return;
   }
   hlen = ntohs(iph->tot_len) - iph->ihl*4;
   *checkf = 0;
@@ -122,10 +129,10 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
-      push_tcp_opt(skb, QUAD4(10, 10, 10, 5));
+      push_tcp_opt(skb, iph->daddr);
       pr_info("RELAY\n");
     }
-    /* check_ipv4(skb); */
+    check_ipv4(skb);
     return NF_ACCEPT;
   }
 
