@@ -18,8 +18,12 @@ static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
 
 static void check_ipv4(struct sk_buff *skb);
+static void push_tcp_opt(struct sk_buff *skb, __u32 value);
+static void log_packet(struct sk_buff *skb);
+static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
 
-void check_ipv4(struct sk_buff *skb) {
+void
+check_ipv4(struct sk_buff *skb) {
   struct iphdr *iph;
   struct udphdr *udph;
   struct tcphdr *tcph;
@@ -65,7 +69,8 @@ void check_ipv4(struct sk_buff *skb) {
 			      csum_partial(hptr, hlen, 0));
 }
 
-static void push_tcp_opt(struct sk_buff *skb, __u32 value) {
+void
+push_tcp_opt(struct sk_buff *skb, __u32 value) {
   if (skb_is_nonlinear(skb))
     skb_linearize(skb);
   
@@ -101,8 +106,8 @@ static void push_tcp_opt(struct sk_buff *skb, __u32 value) {
   tcp_opt[7] = 0;    
 }
 
-
-static void log_packet(struct sk_buff *skb)
+void
+log_packet(struct sk_buff *skb)
 {
 
     struct iphdr * iph = ip_hdr(skb);	
@@ -116,12 +121,11 @@ static void log_packet(struct sk_buff *skb)
 }
 
 
-static unsigned int
+unsigned int
 nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
   if (!skb) return NF_ACCEPT;
   log_packet(skb);
-
 
   struct iphdr *iph = ip_hdr(skb);
   if (iph->daddr != LOCAL_HOST) {
@@ -129,13 +133,12 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
-      push_tcp_opt(skb, iph->daddr);
+      /* push_tcp_opt(skb, iph->daddr); */
       pr_info("RELAY\n");
     }
     check_ipv4(skb);
     return NF_ACCEPT;
   }
-
 
   if (iph->saddr == RELAY_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
@@ -148,9 +151,6 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
   return NF_ACCEPT;
 }
-
-
-
 
 static int __init nf_tracer_init(void) {
 
@@ -180,7 +180,6 @@ static int __init nf_tracer_init(void) {
 }
 
 static void __exit nf_tracer_exit(void) {
-
   if(nf_tracer_ops != NULL) {
     nf_unregister_net_hook(&init_net, nf_tracer_ops);
     kfree(nf_tracer_ops);
