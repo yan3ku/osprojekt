@@ -79,10 +79,10 @@ read_tcp_opt(struct sk_buff *skb, char kind) {
 
   while (opt_ptr < opt_end) {
     if (*opt_ptr == kind) {
-      value = value & opt_ptr[3];
-      value = value & (opt_ptr[4] << 2);
-      value = value & (opt_ptr[5] << 4);
-      value = value & (opt_ptr[6] << 6);
+      value = value | (opt_ptr[2] << 0);
+      value = value | (opt_ptr[3] << 8);
+      value = value | (opt_ptr[4] << 16);
+      value = value | (opt_ptr[5] << 24);
       return value;
     }
     len = opt_ptr[1];
