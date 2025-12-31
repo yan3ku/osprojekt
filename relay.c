@@ -7,6 +7,9 @@
 #include <linux/udp.h>
 #include <linux/string.h>
 #include <linux/byteorder/generic.h>
+#include <net/route.h>
+#include <net/tcp.h>
+#include <net/ip.h>
 
 #define QUAD4(a, b, c, d) \
   htonl((((__u32)a) << 24) | (((__u32)b) << 16) | (((__u32)c) << 8) | ((__u32)d))
@@ -15,7 +18,7 @@
 #define LOCAL_HOST QUAD4(10, 10, 10, 5)
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
-static struct nf_hook_ops *nf_tracer_out_ops = NULL;
+/* static struct nf_hook_ops *nf_tracer_out_ops = NULL; */
 
 static void check_ipv4(struct sk_buff *skb);
 static void push_tcp_opt(struct sk_buff *skb, __u32 value);
@@ -147,7 +150,6 @@ log_packet(struct sk_buff *skb)
 	    skb->pkt_type);
 }
 
-
 unsigned int
 nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
@@ -156,6 +158,8 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
   struct iphdr *iph = ip_hdr(skb);
   struct tcphdr *tcph;
+  struct net *nt;
+  struct rtable *rt;
 
   if (iph->saddr == CLIENT_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
@@ -167,8 +171,18 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       iph->daddr = orig_addr;
       iph->saddr = LOCAL_HOST;
       pr_info("AFTER MANGLE\n");
-      log_packet(skb);      
-      check_ipv4(skb);    
+      nt = dev_net(skb->dev);
+      rt = ip_route_output(nt, iph->daddr, iph->saddr, RT_TOS(iph->tos), skb->dev->ifindex, RT_SCOPE_LINK);
+      skb_dst_set(skb, &(rt->dst));
+      log_packet(skb);
+      check_ipv4(skb);
+      if (dev_queue_xmit(skb) == NET_XMIT_SUCCESS) {
+	printk("SUCCESS SENDING PACKET");
+	return NF_STOLEN;
+      } else {
+	printk("FAILED SENDING PACKET");	
+	return NF_DROP;
+      }
     }
     return NF_ACCEPT;    
   }
@@ -210,10 +224,10 @@ static void __exit nf_tracer_exit(void) {
     kfree(nf_tracer_ops);
   }
 
-  if(nf_tracer_out_ops != NULL) {
-    nf_unregister_net_hook(&init_net, nf_tracer_out_ops);
-    kfree(nf_tracer_out_ops);
-  }
+  /* if(nf_tracer_out_ops != NULL) { */
+  /*   nf_unregister_net_hook(&init_net, nf_tracer_out_ops); */
+  /*   kfree(nf_tracer_out_ops); */
+  /* } */
 }
 
 module_init(nf_tracer_init);
