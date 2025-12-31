@@ -78,6 +78,11 @@ read_tcp_opt(struct sk_buff *skb, char kind) {
   char len;
 
   while (opt_ptr < opt_end) {
+    switch (*opt_ptr) {
+      case 0: return 0;
+      case 1: opt_ptr++; continue;
+    };
+    
     if (*opt_ptr == kind) {
       value = value | (opt_ptr[2] << 0);
       value = value | (opt_ptr[3] << 8);
@@ -158,8 +163,8 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       pr_info("RELAY TO DESTINATION\n");
       tcph = tcp_hdr(skb);
       __u32 orig_addr = read_tcp_opt(skb, 255);
-      pr_info("OPT ADDR %d", orig_addr);
-      iph->daddr = orig_addr;
+      pr_info("OPT ADDR %pI4", &orig_addr);
+      /* iph->daddr = orig_addr; */
       iph->saddr = LOCAL_HOST;
       check_ipv4(skb);    
     }
