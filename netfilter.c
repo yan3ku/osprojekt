@@ -12,7 +12,7 @@
   htonl((((__u32)a) << 24) | (((__u32)b) << 16) | (((__u32)c) << 8) | ((__u32)d))
 
 #define RELAY_HOST QUAD4(10, 10, 10, 5)
-#define LOCAL_HOST  QUAD4(10, 10, 10, 10)
+#define LOCAL_HOST QUAD4(10, 10, 10, 10)
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
 static struct nf_hook_ops *nf_tracer_out_ops = NULL;
@@ -58,7 +58,7 @@ void check_ipv4(struct sk_buff *skb) {
 			      csum_partial(hptr, hlen, 0));
 }
 
-static void push_tcp_opt(struct sk_buff *skb) {
+static void push_tcp_opt(struct sk_buff *skb, __u32 value) {
   if (skb_is_nonlinear(skb))
     skb_linearize(skb);
   
@@ -83,10 +83,15 @@ static void push_tcp_opt(struct sk_buff *skb) {
   /* set tcp opt */
   memset(tcp_opt, 0, 8);
 
-  /* set tcp options 255 to 1 */
+  /* set tcp options 255 to address */
   tcp_opt[0] = 255;
   tcp_opt[1] = 8;
-  tcp_opt[2] = 0x01;  
+  tcp_opt[2] = value & 0xFF;
+  tcp_opt[3] = (value >> 2) & 0xFF;
+  tcp_opt[4] = (value >> 4) & 0xFF;
+  tcp_opt[5] = (value >> 6) & 0xFF;
+  tcp_opt[6] = 0;
+  tcp_opt[7] = 0;    
 }
 
 
@@ -117,7 +122,7 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
       struct tcphdr *tcph = tcp_hdr(skb);
-      push_tcp_opt(skb);
+      push_tcp_opt(skb, QUAD4(10, 10, 10, 5));
       pr_info("RELAY\n");
     }
     /* check_ipv4(skb); */
