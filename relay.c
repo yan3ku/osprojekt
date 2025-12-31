@@ -159,13 +159,15 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
   if (iph->saddr == CLIENT_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      log_packet(skb);
       pr_info("RELAY TO DESTINATION\n");
+      log_packet(skb);
       tcph = tcp_hdr(skb);
       __u32 orig_addr = read_tcp_opt(skb, 255);
       pr_info("OPT ADDR %pI4", &orig_addr);
-      /* iph->daddr = orig_addr; */
+      iph->daddr = orig_addr;
       iph->saddr = LOCAL_HOST;
+      pr_info("AFTER MANGLE\n");
+      log_packet(skb);      
       check_ipv4(skb);    
     }
     return NF_ACCEPT;    
