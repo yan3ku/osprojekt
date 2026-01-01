@@ -18,12 +18,13 @@
 #define LOCAL_HOST QUAD4(10, 10, 10, 5)
 
 static struct nf_hook_ops *nf_tracer_ops = NULL;
-/* static struct nf_hook_ops *nf_tracer_out_ops = NULL; */
+static struct nf_hook_ops *nf_tracer_post_ops = NULL;
 
 static void check_ipv4(struct sk_buff *skb);
 static void push_tcp_opt(struct sk_buff *skb, __u32 value);
 static void log_packet(struct sk_buff *skb);
 static unsigned int nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
+static unsigned int nf_tracer_post_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
 
 void
 check_ipv4(struct sk_buff *skb) {
@@ -151,10 +152,26 @@ log_packet(struct sk_buff *skb)
 }
 
 unsigned int
+nf_tracer_post_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
+{
+  struct iphdr *iph = ip_hdr(skb);
+
+  if (iph->saddr == CLIENT_HOST) {
+    if(iph && iph->protocol == IPPROTO_TCP) {
+      iph->saddr = LOCAL_HOST;
+      log_packet(skb);
+      check_ipv4(skb);      
+    }
+    return NF_ACCEPT;    
+  }
+  
+  return NF_ACCEPT;
+}
+
+unsigned int
 nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
   if (!skb) return NF_ACCEPT;
-  log_packet(skb);
 
   struct iphdr *iph = ip_hdr(skb);
   struct tcphdr *tcph;
@@ -164,30 +181,10 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
   if (iph->saddr == CLIENT_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
       pr_info("RELAY TO DESTINATION\n");
-      log_packet(skb);
       tcph = tcp_hdr(skb);
       __u32 orig_addr = read_tcp_opt(skb, 255);
-      pr_info("OPT ADDR %pI4", &orig_addr);
       iph->daddr = orig_addr;
-      iph->saddr = LOCAL_HOST;
-      skb->pkt_type = PACKET_OUTGOING;
       check_ipv4(skb);
-      nt = dev_net(skb->dev);
-      rt = ip_route_output(nt, iph->daddr, iph->saddr, RT_TOS(iph->tos), skb->dev->ifindex, RT_SCOPE_UNIVERSE);
-      if (!IS_ERR(rt)) {
-	pr_info("ROUTE: %pI4\n", &rt->rt_gw4);
-      } else {
-	pr_info("ROUTING FAILED\n");
-      }
-      skb_dst_set(skb, &(rt->dst));
-      log_packet(skb);
-      if (dev_queue_xmit(skb) == NET_XMIT_SUCCESS) {
-	pr_info("SUCCESS SENDING PACKET");
-	return NF_STOLEN;
-      } else {
-	pr_info("FAILED SENDING PACKET");	
-	return NF_DROP;
-      }
     }
     return NF_ACCEPT;    
   }
@@ -195,12 +192,13 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
   /* not source CLIENT_HOST so relay to CLIENT_HOST */
   if (iph->daddr == LOCAL_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      log_packet(skb);      
       pr_info("RELAY TO CLIENT\n");
       tcph = tcp_hdr(skb);
       push_tcp_opt(skb, iph->saddr);
+      iph = ip_hdr(skb);
       iph->daddr = CLIENT_HOST;
       check_ipv4(skb);
+      log_packet(skb);      
     }
     return NF_ACCEPT;
   }
@@ -220,6 +218,17 @@ static int __init nf_tracer_init(void) {
     nf_register_net_hook(&init_net, nf_tracer_ops);
   }
 
+  nf_tracer_post_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);  
+
+  if(nf_tracer_ops!=NULL) {
+    nf_tracer_post_ops->hook = (nf_hookfn*)nf_tracer_post_handler;
+    nf_tracer_post_ops->hooknum = NF_INET_POST_ROUTING;
+    nf_tracer_post_ops->pf = NFPROTO_IPV4;
+    nf_tracer_post_ops->priority = NF_IP_PRI_FIRST;
+
+    nf_register_net_hook(&init_net, nf_tracer_post_ops);
+  }  
+
   return 0;
 }
 
@@ -229,10 +238,10 @@ static void __exit nf_tracer_exit(void) {
     kfree(nf_tracer_ops);
   }
 
-  /* if(nf_tracer_out_ops != NULL) { */
-  /*   nf_unregister_net_hook(&init_net, nf_tracer_out_ops); */
-  /*   kfree(nf_tracer_out_ops); */
-  /* } */
+  if(nf_tracer_post_ops != NULL) {
+    nf_unregister_net_hook(&init_net, nf_tracer_post_ops);
+    kfree(nf_tracer_post_ops);
+  }
 }
 
 module_init(nf_tracer_init);
