@@ -170,17 +170,22 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       pr_info("OPT ADDR %pI4", &orig_addr);
       iph->daddr = orig_addr;
       iph->saddr = LOCAL_HOST;
-      pr_info("AFTER MANGLE\n");
+      skb->pkt_type = PACKET_OUTGOING;
+      check_ipv4(skb);
       nt = dev_net(skb->dev);
-      rt = ip_route_output(nt, iph->daddr, iph->saddr, RT_TOS(iph->tos), skb->dev->ifindex, RT_SCOPE_LINK);
+      rt = ip_route_output(nt, iph->daddr, iph->saddr, RT_TOS(iph->tos), skb->dev->ifindex, RT_SCOPE_UNIVERSE);
+      if (!IS_ERR(rt)) {
+	pr_info("ROUTE: %pI4\n", &rt->rt_gw4);
+      } else {
+	pr_info("ROUTING FAILED\n");
+      }
       skb_dst_set(skb, &(rt->dst));
       log_packet(skb);
-      check_ipv4(skb);
       if (dev_queue_xmit(skb) == NET_XMIT_SUCCESS) {
-	printk("SUCCESS SENDING PACKET");
+	pr_info("SUCCESS SENDING PACKET");
 	return NF_STOLEN;
       } else {
-	printk("FAILED SENDING PACKET");	
+	pr_info("FAILED SENDING PACKET");	
 	return NF_DROP;
       }
     }
