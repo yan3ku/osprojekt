@@ -1,7 +1,6 @@
-# obj-m += hello-1.o
-obj-m += relay.o
-
-# chardev-objs := chardev.o
+obj-m += netclient.o netrelay.o
+netclient-y += client.o aux.o
+netrelay-y += relay.o aux.o
 
 PWD := $(CURDIR)
 
