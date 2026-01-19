@@ -12,12 +12,6 @@ nf_tracer_post_handler(void *priv, struct sk_buff *skb, const struct nf_hook_sta
 
   if (iph->saddr == RELAY_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      pr_info("MANGLING SOURCE (POST)\n");      
-      tcph = tcp_hdr(skb);
-      __u32 orig_addr = read_tcp_opt(skb, 255);
-      iph->saddr = orig_addr;
-      check_ipv4(skb);
-      log_packet(skb);
     }
     return NF_ACCEPT;    
   }
@@ -48,9 +42,13 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 
   if (iph->saddr == RELAY_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      pr_info("RECEIVED FROM RELAY (PREROUTING)\n");
-      tcph = tcp_hdr(skb);      
+      pr_info("MANGLING SOURCE (PRE)\n");      
+      tcph = tcp_hdr(skb);
+      __u32 orig_addr = read_tcp_opt(skb, 255);
+      iph->saddr = orig_addr;
+      check_ipv4(skb);
       log_packet(skb);
+      
     }
     return NF_ACCEPT;    
   }
@@ -82,16 +80,16 @@ static int __init nf_tracer_init(void) {
     nf_register_net_hook(&init_net, nf_tracer_out_ops);
   }
 
-  nf_tracer_post_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL);
+  /* nf_tracer_post_ops = (struct nf_hook_ops*)kcalloc(1, sizeof(struct nf_hook_ops), GFP_KERNEL); */
 
-  if(nf_tracer_post_ops!=NULL) {
-    nf_tracer_post_ops->hook = (nf_hookfn*)nf_tracer_post_handler;
-    nf_tracer_post_ops->hooknum = NF_INET_POST_ROUTING;
-    nf_tracer_post_ops->pf = NFPROTO_IPV4;
-    nf_tracer_post_ops->priority = NF_IP_PRI_FIRST;
+  /* if(nf_tracer_post_ops!=NULL) { */
+  /*   nf_tracer_post_ops->hook = (nf_hookfn*)nf_tracer_post_handler; */
+  /*   nf_tracer_post_ops->hooknum = NF_INET_POST_ROUTING; */
+  /*   nf_tracer_post_ops->pf = NFPROTO_IPV4; */
+  /*   nf_tracer_post_ops->priority = NF_IP_PRI_FIRST; */
 
-    nf_register_net_hook(&init_net, nf_tracer_post_ops);
-  }  
+  /*   nf_register_net_hook(&init_net, nf_tracer_post_ops); */
+  /* }   */
 
   return 0;
 }
@@ -107,10 +105,10 @@ static void __exit nf_tracer_exit(void) {
     kfree(nf_tracer_out_ops);
   }
 
-  if(nf_tracer_post_ops != NULL) {
-    nf_unregister_net_hook(&init_net, nf_tracer_post_ops);
-    kfree(nf_tracer_out_ops);
-  }
+  /* if(nf_tracer_post_ops != NULL) { */
+  /*   nf_unregister_net_hook(&init_net, nf_tracer_post_ops); */
+  /*   kfree(nf_tracer_out_ops); */
+  /* } */
 }
 
 module_init(nf_tracer_init);
