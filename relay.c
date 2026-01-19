@@ -9,15 +9,12 @@ nf_tracer_post_handler(void *priv, struct sk_buff *skb, const struct nf_hook_sta
 {
   struct iphdr *iph = ip_hdr(skb);
 
-  if (iph->saddr == CLIENT_HOST) {
-    if(iph && iph->protocol == IPPROTO_TCP) {
-      iph->saddr = CLIENT_HOST;
-      log_packet(skb);
-      check_ipv4(skb);      
-    }
-    return NF_ACCEPT;    
+  if(iph && iph->protocol == IPPROTO_TCP) {
+    pr_info("RELAY TO CLIENT\n");
+    iph->saddr = RELAY_HOST;
+    log_packet(skb);
+    check_ipv4(skb);
   }
-  
   return NF_ACCEPT;
 }
 
@@ -36,20 +33,22 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       __u32 orig_addr = read_tcp_opt(skb, 255);
       iph->daddr = orig_addr;
       check_ipv4(skb);
+      log_packet(skb);
     }
     return NF_ACCEPT;    
   }
 
   /* not source CLIENT_HOST so relay to CLIENT_HOST */
-  if (iph->daddr == CLIENT_HOST) {
+  if (iph->daddr == RELAY_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      pr_info("RELAY TO CLIENT\n");
+      pr_info("RELAY TO CLIENT PREROUTING\n");
+      log_packet(skb);
       tcph = tcp_hdr(skb);
       push_tcp_opt(skb, iph->saddr);
       iph = ip_hdr(skb);
       iph->daddr = CLIENT_HOST;
       check_ipv4(skb);
-      log_packet(skb);      
+      log_packet(skb);
     }
     return NF_ACCEPT;
   }
