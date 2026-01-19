@@ -1,5 +1,5 @@
 # obj-m += hello-1.o
-obj-m += netfilter.o
+obj-m += relay.o
 
 # chardev-objs := chardev.o
 
