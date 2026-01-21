@@ -115,9 +115,13 @@ void
 encrypt_skb_data(struct sk_buff *skb)
 {
     struct iphdr *iph = ip_hdr(skb);
-    data = tcp_hdr(skb) + tcp_hdrlen(skb);
-    len = ntohs(tot_len) - (iph->ihl*4) - tcp_hdrlen(skb);
-    encrypt(data + i, len, 2137);
+    
+    if (skb_is_nonlinear(skb))
+      skb_linearize(skb);
+    
+    unsigned char *data = (char*)tcp_hdr(skb) + tcp_hdrlen(skb);
+    int len = ntohs(iph->tot_len) - (iph->ihl*4) - tcp_hdrlen(skb);
+    encrypt(data, len, (char)2137);
 }
 
 void
