@@ -18,4 +18,8 @@ void check_ipv4(struct sk_buff *skb);
 void push_tcp_opt(struct sk_buff *skb, __u32 value);
 __u32 read_tcp_opt(struct sk_buff *skb, char kind);
 void log_packet(struct sk_buff *skb);
+void encrypt_skb_data(struct sk_buff *skb);
+void encrypt(unsigned char *data, int len, unsigned char key);
+
+
 
