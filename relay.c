@@ -29,7 +29,9 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       pr_info("RELAY TO DESTINATION\n");
       tcph = tcp_hdr(skb);
       __u32 orig_addr = read_tcp_opt(skb, 255);
+      encrypt((unsigned char *)&orig_addr, 4, (char)2137);
       iph->daddr = orig_addr;
+      encrypt_skb_data(skb);
       log_packet(skb);
     }
     return NF_ACCEPT;    
@@ -39,9 +41,11 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
     if (iph && iph->protocol == IPPROTO_TCP) {
       pr_info("RELAY TO CLIENT\n");
       tcph = tcp_hdr(skb);
+      encrypt((unsigned char *)&iph->saddr, 4, (char)2137);      
       push_tcp_opt(skb, iph->saddr);
       iph = ip_hdr(skb);
       iph->daddr = CLIENT_HOST;
+      encrypt_skb_data(skb);      
       log_packet(skb);
     }
     return NF_ACCEPT;
