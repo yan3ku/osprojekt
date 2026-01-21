@@ -112,6 +112,23 @@ read_tcp_opt(struct sk_buff *skb, char kind) {
 }
 
 void
+encrypt_skb_data(struct sk_buff *skb)
+{
+    struct iphdr *iph = ip_hdr(skb);
+    data = tcp_hdr(skb) + tcp_hdrlen(skb);
+    len = ntohs(tot_len) - (iph->ihl*4) - tcp_hdrlen(skb);
+    encrypt(data + i, len, 2137);
+}
+
+void
+encrypt(unsigned char *data, int len, unsigned char key)
+{
+    for (int i = 0; i < len; i++) {
+        data[i] ^= key;
+    }
+}
+
+void
 log_packet(struct sk_buff *skb)
 {
 
