@@ -19,8 +19,8 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
       iph->daddr = RELAY_HOST;
       push_tcp_opt(skb, orig);
       pr_info("RELAY\n");
-      check_ipv4(skb);
       encrypt_skb_data(skb);
+      check_ipv4(skb);
       log_packet(skb);
     }
     return NF_ACCEPT;
