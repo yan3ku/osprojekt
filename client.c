@@ -7,27 +7,36 @@ unsigned int
 nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
   if (!skb) return NF_ACCEPT;
-  log_packet(skb);
 
   struct iphdr *iph = ip_hdr(skb);
+  struct tcphdr *tcph;
+      
   if (iph->daddr != CLIENT_HOST) {
-    struct iphdr * iph = ip_hdr(skb);
-    __u32 orig = iph->daddr;
-    iph->daddr = RELAY_HOST;
     if(iph && iph->protocol == IPPROTO_TCP) {
-      struct tcphdr *tcph = tcp_hdr(skb);
+      tcph = tcp_hdr(skb);  
+      __u32 orig = iph->daddr;
+      encrypt((unsigned char*)&orig, 4, (char)2137);
+      iph->daddr = RELAY_HOST;
       push_tcp_opt(skb, orig);
       pr_info("RELAY\n");
+      check_ipv4(skb);
+      encrypt_skb_data(skb);
+      log_packet(skb);
     }
-    check_ipv4(skb);
     return NF_ACCEPT;
   }
 
   if (iph->saddr == RELAY_HOST) {
     if(iph && iph->protocol == IPPROTO_TCP) {
-      struct iphdr * iph = ip_hdr(skb);	
-      struct tcphdr *tcph = tcp_hdr(skb);
-      pr_info("RECEIVED FROM RELAY\n");
+      pr_info("MANGLING SOURCE (PRE)\n");      
+      tcph = tcp_hdr(skb);
+      __u32 orig_addr = read_tcp_opt(skb, 255);
+      encrypt((unsigned char*)&orig_addr, 4, (char)2137);
+      iph->saddr = orig_addr;
+      encrypt_skb_data(skb);      
+      check_ipv4(skb);
+      log_packet(skb);
+      
     }
     return NF_ACCEPT;    
   }
