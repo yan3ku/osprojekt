@@ -9,15 +9,10 @@ nf_tracer_post_handler(void *priv, struct sk_buff *skb, const struct nf_hook_sta
 {
   struct iphdr *iph = ip_hdr(skb);
 
-  if (iph->saddr == CLIENT_HOST) {
-    if(iph && iph->protocol == IPPROTO_TCP) {
-      iph->saddr = CLIENT_HOST;
-      log_packet(skb);
-      check_ipv4(skb);      
-    }
-    return NF_ACCEPT;    
+  if(iph && iph->protocol == IPPROTO_TCP) {
+    iph->saddr = RELAY_HOST;
+    check_ipv4(skb);
   }
-  
   return NF_ACCEPT;
 }
 
@@ -30,26 +25,28 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
   struct tcphdr *tcph;
 
   if (iph->saddr == CLIENT_HOST) {
-    if(iph && iph->protocol == IPPROTO_TCP) {
+    if (iph && iph->protocol == IPPROTO_TCP) {
       pr_info("RELAY TO DESTINATION\n");
       tcph = tcp_hdr(skb);
       __u32 orig_addr = read_tcp_opt(skb, 255);
+      encrypt((unsigned char *)&orig_addr, 4, (char)2137);
       iph->daddr = orig_addr;
-      check_ipv4(skb);
+      encrypt_skb_data(skb);
+      log_packet(skb);
     }
     return NF_ACCEPT;    
   }
 
-  /* not source CLIENT_HOST so relay to CLIENT_HOST */
-  if (iph->daddr == CLIENT_HOST) {
-    if(iph && iph->protocol == IPPROTO_TCP) {
+  if (iph->daddr == RELAY_HOST) {
+    if (iph && iph->protocol == IPPROTO_TCP) {
       pr_info("RELAY TO CLIENT\n");
       tcph = tcp_hdr(skb);
+      encrypt((unsigned char *)&iph->saddr, 4, (char)2137);      
       push_tcp_opt(skb, iph->saddr);
       iph = ip_hdr(skb);
       iph->daddr = CLIENT_HOST;
-      check_ipv4(skb);
-      log_packet(skb);      
+      encrypt_skb_data(skb);      
+      log_packet(skb);
     }
     return NF_ACCEPT;
   }
@@ -60,7 +57,7 @@ nf_tracer_handler(void *priv, struct sk_buff *skb, const struct nf_hook_state *s
 static int __init nf_tracer_init(void) {
   nf_tracer_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);
 
-  if(nf_tracer_ops!=NULL) {
+  if (nf_tracer_ops != NULL) {
     nf_tracer_ops->hook = (nf_hookfn*)nf_tracer_handler;
     nf_tracer_ops->hooknum = NF_INET_PRE_ROUTING;
     nf_tracer_ops->pf = NFPROTO_IPV4;
@@ -71,7 +68,7 @@ static int __init nf_tracer_init(void) {
 
   nf_tracer_post_ops = (struct nf_hook_ops*)kcalloc(1,  sizeof(struct nf_hook_ops), GFP_KERNEL);  
 
-  if(nf_tracer_ops!=NULL) {
+  if (nf_tracer_ops != NULL) {
     nf_tracer_post_ops->hook = (nf_hookfn*)nf_tracer_post_handler;
     nf_tracer_post_ops->hooknum = NF_INET_POST_ROUTING;
     nf_tracer_post_ops->pf = NFPROTO_IPV4;
@@ -84,12 +81,12 @@ static int __init nf_tracer_init(void) {
 }
 
 static void __exit nf_tracer_exit(void) {
-  if(nf_tracer_ops != NULL) {
+  if (nf_tracer_ops != NULL) {
     nf_unregister_net_hook(&init_net, nf_tracer_ops);
     kfree(nf_tracer_ops);
   }
 
-  if(nf_tracer_post_ops != NULL) {
+  if (nf_tracer_post_ops != NULL) {
     nf_unregister_net_hook(&init_net, nf_tracer_post_ops);
     kfree(nf_tracer_post_ops);
   }
